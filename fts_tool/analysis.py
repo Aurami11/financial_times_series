@@ -65,9 +65,9 @@ class FTSAnalyzer:
         """
         self.rolling_window = window
 
-    def compute_volatility(self):
+    def compute_std(self):
         """
-        Computes the rolling volatility of the financial time series data.
+        Computes the standard deviation of the financial time series data.
 
         Args:
             window (int): The window size for calculating rolling volatility.
@@ -85,6 +85,26 @@ class FTSAnalyzer:
             float: The computed mean of the time series data.
         """
         return self.ts.mean()
+    
+    def compute_min(self):
+        """
+        Computes the min of the financial time series data.
+        
+        Returns:
+            float: The computed min of the time series data.
+        """
+
+        return self.ts.min()
+
+    def compute_max(self):
+        """
+        Computes the max of the financial time series data.
+
+        Returns:
+              float: The computed max of the time series data.
+        """
+
+        return self.ts.max()
     
     def compute_excess_kurtosis(self):
          """
@@ -136,6 +156,32 @@ class FTSAnalyzer:
         plt.xlabel("Date")
         plt.show()
 
+    def normal_adjustment(self):
+      """
+      Adjust a normal distribution to the Times Series
+      """
+
+      ts_mean = self.compute_mean()
+      ts_std = self.compute_std()
+
+      plt.figure(figsize=(12, 6))
+      sns.histplot(data=self.ts, kde=True, stat='density', bins=30, color='C0', edgecolor='black', alpha=0.6)
+
+      x = np.linspace(self.ts.min(), self.ts.max(), 200)
+      # protect against zero or NaN std
+      if ts_std is None or np.isnan(ts_std) or ts_std <= 0:
+         plt.title("Normal fit not available (std is zero or NaN)")
+      else:
+         pdf = (1.0 / (ts_std * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - ts_mean) / ts_std) ** 2)
+         plt.plot(x, pdf, color='C1', lw=2, label='Normal PDF (fit)')
+         plt.axvline(ts_mean, color='k', linestyle='--', label=f"Mean = {ts_mean:.4f}")
+
+      plt.title("Histogram and Normal Fit")
+      plt.xlabel("Value")
+      plt.ylabel("Density")
+      plt.legend()
+      plt.show()
+
     def print_summary(self):
         """
         Prints a summary of the financial time series data, including mean, volatility, excess kurtosis, and skewness.
@@ -145,6 +191,8 @@ class FTSAnalyzer:
         """
         print("Summary of Financial Time Series Data:")
         print(f"Mean: {self.compute_mean()}")
-        print(f"Volatility: {self.compute_volatility()}")
+        print(f"Std: {self.compute_std()}")
+        print(f"Min: {self.compute_min()}")
+        print(f"Max: {self.compute_max()}")
         print(f"Excess Kurtosis: {self.compute_excess_kurtosis()}")
         print(f"Skewness: {self.compute_skewness()}")
