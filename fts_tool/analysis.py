@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from scipy import stats
 
 class FTSAnalyzer:
     """
@@ -196,3 +197,88 @@ class FTSAnalyzer:
         print(f"Max: {self.compute_max()}")
         print(f"Excess Kurtosis: {self.compute_excess_kurtosis()}")
         print(f"Skewness: {self.compute_skewness()}")
+
+
+    def null_hypothesis(self):
+        """
+        Runs basic null-hypothesis tests on the selected time series.
+        The approximation used here is not the one for large sample (that is used in Chapter 1 of Analysis of Financial Times Series by Ruey S. Tsay)
+        Tests include:
+            - H0: mean = 0
+            - H0: skewness = 0
+            - H0: excess kurtosis = 0
+            - Jarque-Bera test for normality
+
+        Returns:
+            dict: A dictionary containing test statistics and p-values.
+        """
+        if not hasattr(self, "ts") or self.ts is None:
+            raise ValueError("Define a time series with define_ts() before running the null hypothesis tests.")
+
+        x = pd.to_numeric(self.ts, errors="coerce").dropna()
+        if len(x) < 2:
+            raise ValueError("At least two valid observations are required for hypothesis testing.")
+
+        n = len(x)
+        mean = x.mean()
+        std = x.std(ddof=1)
+        skew = x.skew()
+        excess_kurtosis = x.kurtosis()
+
+        results = {}
+
+        if std == 0 or pd.isna(std):
+            results["null_mean"] = {
+                "hypothesis": "H0: mean = 0",
+                "statistic": np.nan,
+                "p_value": np.nan,
+                "reject_null": False,
+                "note": "Standard deviation is zero, so the t-test is undefined."
+            }
+        else:
+            t_stat = mean / (std / np.sqrt(n))
+            p_value = 2 * stats.t.sf(abs(t_stat), df=n - 1) if stats is not None else np.nan
+            results["null_mean"] = {
+                "hypothesis": "H0: mean = 0",
+                "statistic": t_stat,
+                "p_value": p_value,
+                "reject_null": bool(stats is not None and p_value < 0.05),
+                "note": "Two-sided one-sample t-test."
+            }
+
+        skew_se = np.sqrt(6 * n * (n - 1) / ((n - 2) * (n + 1) * (n + 3)))
+        skew_z = skew / skew_se if skew_se > 0 else np.nan
+        p_skew = 2 * stats.norm.sf(abs(skew_z)) if stats is not None and np.isfinite(skew_z) else np.nan
+        results["null_skewness"] = {
+            "hypothesis": "H0: skewness = 0",
+            "statistic": skew_z,
+            "p_value": p_skew,
+            "reject_null": bool(stats is not None and np.isfinite(p_skew) and p_skew < 0.05),
+            "note": "Approximate z-test for zero skewness."
+        }
+
+        kurtosis_se = np.sqrt(24 * n * (n - 1) ** 2 / ((n - 2) * (n - 3) * (n + 3) * (n + 5)))
+        kurtosis_z = excess_kurtosis / kurtosis_se if kurtosis_se > 0 else np.nan
+        p_kurtosis = 2 * stats.norm.sf(abs(kurtosis_z)) if stats is not None and np.isfinite(kurtosis_z) else np.nan
+        results["null_kurtosis"] = {
+            "hypothesis": "H0: excess kurtosis = 0",
+            "statistic": kurtosis_z,
+            "p_value": p_kurtosis,
+            "reject_null": bool(stats is not None and np.isfinite(p_kurtosis) and p_kurtosis < 0.05),
+            "note": "Approximate z-test for normal kurtosis."
+        }
+
+        jb_stat = (n / 6.0) * (skew ** 2 + (excess_kurtosis ** 2) / 4.0)
+        p_jarque_bera = stats.chi2.sf(jb_stat, 2) if stats is not None else np.nan
+        results["jarque_bera"] = {
+            "hypothesis": "H0: data are normally distributed",
+            "statistic": jb_stat,
+            "p_value": p_jarque_bera,
+            "reject_null": bool(stats is not None and p_jarque_bera < 0.05),
+            "note": "Jarque-Bera test for normality."
+        }
+
+        for key, value in results.items():
+            print(f"{key}: {value}")
+
+        return results
